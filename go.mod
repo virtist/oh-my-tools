@@ -1,10 +1,16 @@
 module omt
 
-go 1.22.3
+go 1.20
 
 require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/viper v1.19.0
+)
+
+require (
+	github.com/google/go-cmp v0.6.0 // indirect
+	github.com/rogpeppe/go-internal v1.11.0 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
 
 require (

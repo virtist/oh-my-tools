@@ -150,18 +150,14 @@ func readConfig(configFile string) (*Config, error) {
 	return &config, nil
 }
 
-func main() {
-	// Parse command line flags
-	configFile := flag.String("config", "config.yaml", "Path to the configuration file")
-	lastBackupFile := flag.String("last-backup", "last_backup.txt", "File to store the last backup time")
-	retries := flag.Int("retries", 3, "Number of retries for backup operations")
-	flag.Parse()
-
-	// Read configuration
-	config, err := readConfig(*configFile)
-	if err != nil {
-		logrus.Fatalf("Error reading config file: %v", err)
+func printBackupSummary(projects []GitLabProject) {
+	logrus.Infof("Found %d projects:\n", len(projects))
+	for _, project := range projects {
+		logrus.Infof("- %s (%s) @%s\n", project.Name, project.PathWithNamespace, project.LastActivity)
 	}
+}
+
+func backupAllProjects(config *Config, lastBackupFile string, retries int) {
 
 	// Fetch all accessible GitLab projects
 	projects, err := fetchProjects(config.GitlabURL, config.Token)
@@ -178,12 +174,14 @@ func main() {
 
 	// Read the last backup time
 	var lastBackup time.Time
-	if _, err := os.Stat(*lastBackupFile); err == nil {
-		lastBackup, err = lastBackupTime(*lastBackupFile)
+	if _, err := os.Stat(lastBackupFile); err == nil {
+		lastBackup, err = lastBackupTime(lastBackupFile)
 		if err != nil {
 			logrus.Fatalf("Error reading last backup time: %v", err)
 		}
 	}
+
+	printBackupSummary(projects)
 
 	// Initialize concurrency control
 	var wg sync.WaitGroup
@@ -197,13 +195,29 @@ func main() {
 			namespaceDir := filepath.Dir(project.PathWithNamespace)
 			backupDir := path.Join(config.BackupDir, namespaceDir)
 
-			go backupGitRepo(project.SSHURLToRepo, backupDir, &wg, sem, *retries)
+			go backupGitRepo(project.HTTPURLToRepo, backupDir, &wg, sem, retries)
 		} else {
 			logrus.Infof("Skipping %s, no updates since last backup.\n", project.Name)
 		}
 	}
 
 	wg.Wait()
+}
+
+func main() {
+	// Parse command line flags
+	configFile := flag.String("config", "config.yaml", "Path to the configuration file")
+	lastBackupFile := flag.String("last-backup", "last_backup.txt", "File to store the last backup time")
+	retries := flag.Int("retries", 3, "Number of retries for backup operations")
+	flag.Parse()
+
+	// Read configuration
+	config, err := readConfig(*configFile)
+	if err != nil {
+		logrus.Fatalf("Error reading config file: %v", err)
+	}
+
+	backupAllProjects(config, *lastBackupFile, *retries)
 
 	// Save the last backup time
 	if err := saveLastBackupTime(*lastBackupFile); err != nil {
